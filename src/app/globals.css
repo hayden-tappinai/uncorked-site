@@ -1,0 +1,45 @@
+@import "tailwindcss";
+
+@theme {
+  --color-burgundy: #39161e;
+  --color-burgundy-dark: #260008;
+  --color-gold: #d6bf89;
+  --color-gold-secondary: #d7ba6b;
+  --color-crimson: #c41230;
+  --color-cream: #fff6e5;
+  --color-dark: #232324;
+  --font-serif: "EB Garamond", Georgia, "Times New Roman", serif;
+  --font-sans: "Mulish", "Helvetica Neue", Arial, sans-serif;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--color-burgundy-dark);
+  color: var(--color-cream);
+}
+
+::selection {
+  background-color: var(--color-gold);
+  color: var(--color-burgundy-dark);
+}
+
+/* Smooth scrolling for lenis */
+html.lenis, html.lenis body {
+  height: auto;
+}
+
+.lenis.lenis-smooth {
+  scroll-behavior: auto !important;
+}
+
+.lenis.lenis-smooth [data-lenis-prevent] {
+  overscroll-behavior: contain;
+}
+
+.lenis.lenis-stopped {
+  overflow: hidden;
+}
