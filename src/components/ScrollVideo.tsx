@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import gsap from "gsap";
+import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
+import Lenis from "lenis";
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -16,173 +17,293 @@ const getFramePath = (index: number): string => {
 };
 
 export default function ScrollVideo() {
+  const sectionRef = useRef<HTMLElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const framesRef = useRef<HTMLImageElement[]>([]);
-  const [loadProgress, setLoadProgress] = useState(0);
+  const headerRef = useRef<HTMLDivElement>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const imagesRef = useRef<HTMLImageElement[]>(
+    new Array(FRAME_COUNT).fill(null)
+  );
+  const frameIndexRef = useRef(0);
+  const lenisRef = useRef<Lenis | null>(null);
+  const loadedCountRef = useRef(0);
+  const [initialReady, setInitialReady] = useState(false);
 
-  useEffect(() => {
+  // Resize canvas for retina displays
+  const resizeCanvas = () => {
     const canvas = canvasRef.current;
-    const container = containerRef.current;
-    if (!canvas || !container) return;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = window.innerWidth * dpr;
+    canvas.height = window.innerHeight * dpr;
+    canvas.style.width = `${window.innerWidth}px`;
+    canvas.style.height = `${window.innerHeight}px`;
+    ctx.scale(dpr, dpr);
+  };
 
-    const context = canvas.getContext("2d");
-    if (!context) return;
+  // Render frame to canvas (with fallback to nearest loaded frame)
+  const renderFrame = (index: number) => {
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext("2d");
 
-    const frames: HTMLImageElement[] = [];
-    framesRef.current = frames;
-    let loadedCount = 0;
-
-    const setCanvasSize = () => {
-      const dpr = window.devicePixelRatio || 1;
-      canvas.width = window.innerWidth * dpr;
-      canvas.height = window.innerHeight * dpr;
-      canvas.style.width = `${window.innerWidth}px`;
-      canvas.style.height = `${window.innerHeight}px`;
-      context.scale(dpr, dpr);
-    };
-
-    setCanvasSize();
-    window.addEventListener("resize", setCanvasSize);
-
-    const renderFrame = (index: number) => {
-      const img = frames[index];
-      if (!img || !img.complete) {
-        // Find nearest loaded frame
-        for (let offset = 1; offset < FRAME_COUNT; offset++) {
-          const before = frames[index - offset];
-          if (before?.complete) {
-            drawImage(context, before, canvas);
-            return;
-          }
-          const after = frames[index + offset];
-          if (after?.complete) {
-            drawImage(context, after, canvas);
-            return;
-          }
+    let img = imagesRef.current[index];
+    if (!img) {
+      for (let i = index; i >= 0; i--) {
+        if (imagesRef.current[i]) {
+          img = imagesRef.current[i];
+          break;
         }
-        return;
       }
-      drawImage(context, img, canvas);
-    };
+    }
 
-    const drawImage = (
-      ctx: CanvasRenderingContext2D,
-      img: HTMLImageElement,
-      cvs: HTMLCanvasElement
-    ) => {
-      const dpr = window.devicePixelRatio || 1;
-      const cw = cvs.width / dpr;
-      const ch = cvs.height / dpr;
+    if (!canvas || !ctx || !img) return;
 
-      // Cover mode
-      const imgRatio = img.width / img.height;
-      const canvasRatio = cw / ch;
-      let drawW, drawH, drawX, drawY;
+    const canvasWidth = window.innerWidth;
+    const canvasHeight = window.innerHeight;
+    const imgRatio = img.naturalWidth / img.naturalHeight;
+    const canvasRatio = canvasWidth / canvasHeight;
 
-      if (imgRatio > canvasRatio) {
-        drawH = ch;
-        drawW = ch * imgRatio;
-        drawX = (cw - drawW) / 2;
-        drawY = 0;
-      } else {
-        drawW = cw;
-        drawH = cw / imgRatio;
-        drawX = 0;
-        drawY = (ch - drawH) / 2;
-      }
+    let drawWidth, drawHeight, drawX, drawY;
 
-      ctx.clearRect(0, 0, cw, ch);
-      ctx.drawImage(img, drawX, drawY, drawW, drawH);
-    };
+    if (imgRatio > canvasRatio) {
+      drawHeight = canvasHeight;
+      drawWidth = canvasHeight * imgRatio;
+      drawX = (canvasWidth - drawWidth) / 2;
+      drawY = 0;
+    } else {
+      drawWidth = canvasWidth;
+      drawHeight = canvasWidth / imgRatio;
+      drawX = 0;
+      drawY = (canvasHeight - drawHeight) / 2;
+    }
 
-    const loadImage = (index: number): Promise<void> => {
-      return new Promise((resolve) => {
-        const img = new Image();
-        img.src = getFramePath(index);
-        img.onload = () => {
-          frames[index] = img;
-          loadedCount++;
-          setLoadProgress(Math.round((loadedCount / FRAME_COUNT) * 100));
-          resolve();
-        };
-        img.onerror = () => resolve();
-      });
-    };
+    ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
+  };
 
-    const loadFrames = async () => {
-      // Load initial frames immediately
+  // Load single image and decode it
+  const loadImage = (index: number): Promise<HTMLImageElement | null> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.src = getFramePath(index);
+      img.onload = async () => {
+        try {
+          await img.decode();
+          imagesRef.current[index] = img;
+          loadedCountRef.current++;
+          resolve(img);
+        } catch {
+          resolve(null);
+        }
+      };
+      img.onerror = () => resolve(null);
+    });
+  };
+
+  // Progressive loading — first batch immediately, rest in background
+  useEffect(() => {
+    const loadImagesProgressively = async () => {
       const initialPromises = [];
       for (let i = 0; i < INITIAL_FRAMES; i++) {
         initialPromises.push(loadImage(i));
       }
       await Promise.all(initialPromises);
 
-      // Render first frame
+      resizeCanvas();
       renderFrame(0);
+      setInitialReady(true);
 
-      // Load remaining in batches
-      for (let start = INITIAL_FRAMES; start < FRAME_COUNT; start += BATCH_SIZE) {
-        const batch = [];
-        for (let i = start; i < Math.min(start + BATCH_SIZE, FRAME_COUNT); i++) {
-          batch.push(loadImage(i));
+      for (
+        let batchStart = INITIAL_FRAMES;
+        batchStart < FRAME_COUNT;
+        batchStart += BATCH_SIZE
+      ) {
+        const batchEnd = Math.min(batchStart + BATCH_SIZE, FRAME_COUNT);
+        const batchPromises = [];
+        for (let i = batchStart; i < batchEnd; i++) {
+          batchPromises.push(loadImage(i));
         }
-        await Promise.all(batch);
+        await Promise.all(batchPromises);
       }
     };
 
-    loadFrames();
+    loadImagesProgressively();
+  }, []);
 
-    // GSAP ScrollTrigger animation
-    const frameObj = { frame: 0 };
+  // Initialize Lenis + GSAP ScrollTrigger (synced via GSAP ticker — same as TappinAI)
+  useEffect(() => {
+    if (!initialReady) return;
 
-    gsap.to(frameObj, {
-      frame: FRAME_COUNT - 1,
-      snap: "frame",
-      ease: "none",
-      scrollTrigger: {
-        trigger: container,
-        start: "top top",
-        end: "bottom bottom",
-        scrub: 0.5,
-        onUpdate: () => {
-          renderFrame(Math.round(frameObj.frame));
-        },
+    // Initialize Lenis with GSAP ticker sync
+    const lenis = new Lenis({
+      duration: 1.2,
+      easing: (t: number) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+      smoothWheel: true,
+    });
+    lenisRef.current = lenis;
+
+    // Sync Lenis with GSAP ticker (not standalone RAF — this is key)
+    gsap.ticker.add((time: number) => {
+      lenis.raf(time * 1000);
+    });
+    gsap.ticker.lagSmoothing(0);
+
+    // ScrollTrigger — pin section, scrub through frames
+    const scrollTrigger = ScrollTrigger.create({
+      id: "scroll-unboxing",
+      trigger: sectionRef.current,
+      start: "top top",
+      end: "+=500%",
+      pin: true,
+      pinSpacing: true,
+      scrub: 0.5,
+      anticipatePin: 1,
+      onUpdate: (self) => {
+        const progress = self.progress;
+
+        // Update frame based on scroll progress (use full 0-100% for frames)
+        const frameIndex = Math.min(
+          Math.floor(progress * (FRAME_COUNT - 1)),
+          FRAME_COUNT - 1
+        );
+        if (frameIndex !== frameIndexRef.current) {
+          frameIndexRef.current = frameIndex;
+          renderFrame(frameIndex);
+        }
+
+        // Header text — push back in Z-space and fade out (0-25%)
+        if (headerRef.current) {
+          if (progress <= 0.25) {
+            const headerProgress = progress / 0.25;
+            const translateZ = -600 * headerProgress;
+            const opacity =
+              progress >= 0.18 ? 1 - (progress - 0.18) / 0.07 : 1;
+            headerRef.current.style.transform = `translateZ(${translateZ}px)`;
+            headerRef.current.style.opacity = String(Math.max(0, opacity));
+          } else {
+            headerRef.current.style.opacity = "0";
+            headerRef.current.style.transform = "translateZ(-600px)";
+          }
+        }
+
+        // Burgundy vignette overlay fades in at end (85-100%)
+        if (overlayRef.current) {
+          if (progress < 0.85) {
+            overlayRef.current.style.opacity = "0";
+          } else {
+            const fadeProgress = (progress - 0.85) / 0.15;
+            overlayRef.current.style.opacity = String(fadeProgress);
+          }
+        }
       },
     });
 
-    return () => {
-      window.removeEventListener("resize", setCanvasSize);
-      ScrollTrigger.getAll().forEach((t) => t.kill());
+    const handleResize = () => {
+      resizeCanvas();
+      renderFrame(frameIndexRef.current);
+      ScrollTrigger.refresh();
     };
-  }, []);
+    window.addEventListener("resize", handleResize);
+
+    return () => {
+      const st = ScrollTrigger.getById("scroll-unboxing");
+      if (st) st.kill();
+      lenis.destroy();
+      window.removeEventListener("resize", handleResize);
+    };
+  }, [initialReady]);
 
   return (
-    <div id="scroll-video" ref={containerRef} className="relative h-[500vh]">
-      {/* Sticky canvas */}
-      <div className="sticky top-0 h-screen w-full overflow-hidden">
-        <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
+    <section
+      id="scroll-video"
+      ref={sectionRef}
+      className="scroll-hero relative h-screen w-full overflow-hidden z-0"
+    >
+      {/* Canvas background — full viewport, pinned */}
+      <canvas
+        ref={canvasRef}
+        className="absolute inset-0 w-full h-full object-cover z-0"
+      />
 
-        {/* Overlay content */}
-        <div className="absolute inset-0 flex items-end justify-center pb-20 pointer-events-none">
+      {/* Hero content with 3D perspective (fades out as you scroll) */}
+      <div
+        className="absolute inset-0 flex items-center justify-center pointer-events-none"
+        style={{ perspective: "1000px" }}
+      >
+        <div
+          ref={headerRef}
+          className="text-center px-6 max-w-3xl"
+          style={{ transformStyle: "preserve-3d" }}
+        >
+          <p
+            className="text-xs tracking-[0.35em] uppercase mb-4"
+            style={{
+              color: "rgba(214, 191, 137, 0.8)",
+              textShadow: "0 1px 3px rgba(0,0,0,0.5)",
+            }}
+          >
+            The Unboxing
+          </p>
+          <h2
+            className="font-serif text-4xl md:text-6xl lg:text-7xl font-normal leading-tight mb-6"
+            style={{
+              color: "#fff6e5",
+              textShadow: "0 2px 12px rgba(0,0,0,0.5)",
+            }}
+          >
+            Scroll to
+            <span className="block">Experience the Reveal</span>
+          </h2>
+          <p
+            className="text-base md:text-lg max-w-md mx-auto"
+            style={{
+              color: "rgba(255, 246, 229, 0.6)",
+              textShadow: "0 1px 3px rgba(0,0,0,0.4)",
+            }}
+          >
+            Every detail. Every moment. From sealed box to first pour.
+          </p>
+        </div>
+      </div>
+
+      {/* Vignette overlay */}
+      <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_at_center,transparent_40%,rgba(38,0,8,0.5)_100%)] z-10" />
+
+      {/* End-of-scroll fade to burgundy (smooth transition to next section) */}
+      <div
+        ref={overlayRef}
+        className="absolute inset-0 z-20 pointer-events-none"
+        style={{
+          opacity: 0,
+          background:
+            "linear-gradient(to bottom, transparent 20%, rgba(38, 0, 8, 0.8) 70%, #260008 100%)",
+        }}
+      />
+
+      {/* Loading overlay */}
+      {!initialReady && (
+        <div
+          className="absolute inset-0 flex items-center justify-center z-50"
+          style={{ backgroundColor: "#260008" }}
+        >
           <div className="text-center">
-            <p className="text-gold/60 text-xs tracking-[0.3em] uppercase mb-2">
-              Scroll to reveal
+            <div
+              className="w-10 h-10 border-2 rounded-full animate-spin mb-4 mx-auto"
+              style={{
+                borderColor: "rgba(214, 191, 137, 0.2)",
+                borderTopColor: "#d6bf89",
+              }}
+            />
+            <p
+              className="text-xs tracking-[0.2em] uppercase"
+              style={{ color: "rgba(214, 191, 137, 0.4)" }}
+            >
+              Preparing
             </p>
-            <p className="text-cream/40 text-sm">The Unboxing Experience</p>
           </div>
         </div>
-
-        {/* Vignette overlay */}
-        <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_at_center,transparent_50%,rgba(38,0,8,0.6)_100%)]" />
-
-        {/* Loading indicator */}
-        {loadProgress < 100 && (
-          <div className="absolute bottom-4 right-4 text-gold/40 text-xs tracking-wider">
-            Loading {loadProgress}%
-          </div>
-        )}
-      </div>
-    </div>
+      )}
+    </section>
   );
 }
