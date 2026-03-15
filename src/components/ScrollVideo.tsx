@@ -226,7 +226,7 @@ export default function ScrollVideo() {
         className="absolute inset-0 w-full h-full object-cover z-0"
       />
 
-      {/* Hero content with 3D perspective (fades out as you scroll) */}
+      {/* Hero content overlaid on canvas (fades out as you scroll) */}
       <div
         className="absolute inset-0 flex items-center justify-center pointer-events-none"
         style={{ perspective: "1000px" }}
@@ -237,33 +237,55 @@ export default function ScrollVideo() {
           style={{ transformStyle: "preserve-3d" }}
         >
           <p
-            className="text-xs tracking-[0.35em] uppercase mb-4"
+            className="text-xs tracking-[0.35em] uppercase mb-6"
             style={{
               color: "rgba(214, 191, 137, 0.8)",
-              textShadow: "0 1px 3px rgba(0,0,0,0.5)",
+              textShadow: "0 2px 6px rgba(0,0,0,0.7)",
             }}
           >
-            The Unboxing
+            A Rutherford Ranch Experience
           </p>
-          <h2
-            className="font-serif text-4xl md:text-6xl lg:text-7xl font-normal leading-tight mb-6"
+          <h1
+            className="font-serif text-6xl md:text-8xl font-normal leading-tight mb-6"
             style={{
               color: "#fff6e5",
-              textShadow: "0 2px 12px rgba(0,0,0,0.5)",
+              textShadow: "0 2px 20px rgba(0,0,0,0.6), 0 4px 40px rgba(0,0,0,0.3)",
             }}
           >
-            Scroll to
-            <span className="block">Experience the Reveal</span>
-          </h2>
+            Uncorked
+          </h1>
           <p
-            className="text-base md:text-lg max-w-md mx-auto"
+            className="text-lg md:text-xl max-w-xl mx-auto mb-10"
             style={{
               color: "rgba(255, 246, 229, 0.6)",
-              textShadow: "0 1px 3px rgba(0,0,0,0.4)",
+              textShadow: "0 1px 4px rgba(0,0,0,0.5)",
             }}
           >
-            Every detail. Every moment. From sealed box to first pour.
+            Three bottles. Three stories. One unforgettable gift from the heart of
+            Napa Valley.
           </p>
+          <div className="pointer-events-auto">
+            <a
+              href="#about"
+              className="inline-flex items-center gap-2 text-gold border border-gold/30 px-8 py-3 hover:bg-gold/10 transition-all tracking-widest text-sm uppercase"
+              style={{ textShadow: "0 1px 3px rgba(0,0,0,0.5)" }}
+            >
+              Discover the Collection
+              <svg
+                className="w-4 h-4 animate-bounce"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={1.5}
+                  d="M19 14l-7 7m0 0l-7-7m7 7V3"
+                />
+              </svg>
+            </a>
+          </div>
         </div>
       </div>
 
