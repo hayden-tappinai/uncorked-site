@@ -41,8 +41,8 @@ export default function About() {
           <div className="relative">
             <div className="aspect-[4/5] bg-burgundy border border-gold/10 overflow-hidden">
               <img
-                src="/hero.png"
-                alt="Uncorked wine gift box"
+                src="/box-open-filled.png"
+                alt="Uncorked gift box with three bottles of Rutherford Ranch Reserve Cabernet and wax-sealed envelopes"
                 className="w-full h-full object-cover opacity-90 hover:opacity-100 transition-opacity duration-500"
               />
             </div>

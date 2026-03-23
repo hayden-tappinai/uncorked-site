@@ -22,7 +22,7 @@ export default function Hero() {
       {/* Background image */}
       <div
         className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-        style={{ backgroundImage: "url(/hero.png)" }}
+        style={{ backgroundImage: "url(/box-closed-branded.png)" }}
       >
         <div className="absolute inset-0 bg-gradient-to-b from-burgundy-dark/60 via-burgundy-dark/40 to-burgundy-dark" />
       </div>
