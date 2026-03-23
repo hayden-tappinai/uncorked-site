@@ -42,6 +42,13 @@ export default function Experience() {
             <span className="text-gold">Living Room</span>
           </h2>
           <div className="w-16 h-px bg-gold/30 mx-auto" />
+          <div className="mt-12 mb-8 max-w-2xl mx-auto">
+            <img
+              src="/lifestyle-hero.png"
+              alt="Uncorked gift set styled on wine barrel"
+              className="w-full border border-gold/10 opacity-90"
+            />
+          </div>
         </div>
 
         {/* Timeline steps */}
